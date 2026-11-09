@@ -179,6 +179,8 @@ def main():
     ap.add_argument("--db", default=str(DEFAULT_DB))
     ap.add_argument("--out", default=str(WEB_DATA))
     ap.add_argument("--min-votes", type=int, default=10)
+    ap.add_argument("--min-votes-indian", type=int, default=2,
+                    help="Indian shows get few TMDB votes, so they need a lower bar")
     ap.add_argument("--keep-talk", action="store_true", help="keep News and Talk Show types")
     ap.add_argument("--min-cluster", type=int, default=0, help="HDBSCAN min cluster size (0 = auto)")
     ap.add_argument("--demo", action="store_true", help="mark output as demo data")
@@ -189,7 +191,8 @@ def main():
     shows = [
         s for s in load_shows(con)
         if s.get("name") and not s.get("adult")
-        and s.get("vote_count", 0) >= args.min_votes
+        and s.get("vote_count", 0) >= (
+            args.min_votes_indian if LANG_GROUP.get(s.get("original_language")) == "indian" else args.min_votes)
         and (s.get("genres") or s.get("keywords"))
         and (args.keep_talk or s.get("type") not in ("News", "Talk Show"))
     ]
@@ -280,8 +283,10 @@ def main():
     dims = max(2, min(64, n - 2, X.shape[1] - 1))
     Z = TruncatedSVD(n_components=dims, random_state=42).fit_transform(X)
     Z /= np.linalg.norm(Z, axis=1, keepdims=True) + 1e-9
-    xy = umap.UMAP(n_neighbors=min(15, n - 1), min_dist=0.12 if small else 0.08, metric="cosine",
-                   random_state=42, init="random" if small else "spectral").fit_transform(Z)
+    # larger min_dist/spread keep thousands of stars from piling into one bright core
+    xy = umap.UMAP(n_neighbors=min(15, n - 1) if small else 25, min_dist=0.12 if small else 0.45,
+                   spread=1.0 if small else 1.8, metric="cosine", random_state=42,
+                   init="random" if small else "spectral").fit_transform(Z)
     xy -= xy.min(axis=0)
     xy /= xy.max(axis=0).max() + 1e-9
     xy = 40 + xy * 920  # world units 40..960

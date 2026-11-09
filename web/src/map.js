@@ -56,6 +56,7 @@ export async function createMap(el, core, { onSelect, onBackground }) {
   app.stage.addChild(labelLayer);
 
   const colorOf = (s) => core.clusters[s.c]?.color || '#9FD8FF';
+  const NEB_ALPHA = core.clusters.length > 12 ? 0.16 : 0.32;
 
   core.clusters.forEach((c) => {
     const n = new Sprite(nebTex);
@@ -63,19 +64,22 @@ export async function createMap(el, core, { onSelect, onBackground }) {
     n.position.set(c.x, c.y);
     n.width = n.height = c.r * 2.8;
     n.tint = c.color;
-    n.alpha = 0.32;
+    n.alpha = NEB_ALPHA;
     n.blendMode = 'add';
     nebLayer.addChild(n);
     c._sprite = n;
   });
 
+  // with thousands of stars, shrink them and stop additive blending, or the centre burns out to white
+  const crowd = core.shows.length > 1000;
+  const density = Math.max(0.2, Math.min(1, Math.sqrt(400 / core.shows.length)));
   const stars = core.shows.map((s) => {
     const sp = new Sprite(starTex);
     sp.anchor.set(0.5);
     sp.position.set(s.x, s.y);
     sp.tint = colorOf(s);
-    sp.blendMode = 'add';
-    sp._base = 0.12 + 0.28 * s.p * s.p;
+    sp.blendMode = crowd ? 'normal' : 'add';
+    sp._base = (0.12 + 0.28 * s.p * s.p) * density * (crowd ? 1.6 : 1);
     starLayer.addChild(sp);
     return sp;
   });
@@ -231,7 +235,7 @@ export async function createMap(el, core, { onSelect, onBackground }) {
       else emph[i] = 1;
     });
     core.clusters.forEach((c) => {
-      c._sprite.alpha = cluster !== null ? (c.id === cluster ? 0.45 : 0.08) : anyFocus ? 0.14 : 0.32;
+      c._sprite.alpha = cluster !== null ? (c.id === cluster ? 0.45 : 0.06) : anyFocus ? NEB_ALPHA * 0.45 : NEB_ALPHA;
     });
     drawLines();
     changed();
@@ -320,12 +324,18 @@ export async function createMap(el, core, { onSelect, onBackground }) {
       t.alpha = i === primary || i === hoverIdx ? 1 : focus.has(i) ? 0.95 : 0.72;
       t.position.set(Math.round(sh.x * s + world.x + 7), Math.round(sh.y * s + world.y - 7));
     });
+    // galaxy names: biggest galaxies first, skip any that would overlap a name already placed
     const zoomRatio = s / fitScale();
+    const placed = [];
     clusterLabels.forEach((t, c) => {
       const cl = core.clusters[c];
-      t.position.set(cl.x * s + world.x, (cl.y - cl.r * 0.9) * s + world.y);
+      t.position.set(cl.x * s + world.x, (cl.y - cl.r * 0.6) * s + world.y);
       const faded = (activeCluster !== null && activeCluster !== c) || focus.size > 0;
-      t.alpha = zoomRatio > 3.5 ? 0 : faded ? 0.25 : 0.85;
+      const box = [t.x - t.width / 2 - 6, t.y - 9, t.x + t.width / 2 + 6, t.y + 9];
+      const hit = placed.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]);
+      const show = activeCluster === c || (!hit && zoomRatio <= 3.5);
+      if (show) placed.push(box);
+      t.alpha = !show ? 0 : faded && activeCluster !== c ? 0.25 : 0.9;
     });
   });
 

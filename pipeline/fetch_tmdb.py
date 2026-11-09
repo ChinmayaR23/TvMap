@@ -54,6 +54,24 @@ def candidate_ids_from_discover(tmdb, limit):
     return ids[:limit]
 
 
+def extra_language_ids(tmdb, languages, per_language):
+    """Global popularity lists miss most regional shows, so also take the top shows per language."""
+    ids = []
+    for lang in languages:
+        got = []
+        for page in range(1, per_language // 20 + 2):
+            data = tmdb.get("/discover/tv", with_original_language=lang, sort_by="popularity.desc",
+                            page=page, include_adult="false")
+            if not data or not data.get("results"):
+                break
+            got += [x["id"] for x in data["results"]]
+            if page >= data.get("total_pages", 0):
+                break
+        print(f"  {lang}: {len(got[:per_language])} shows")
+        ids += got[:per_language]
+    return ids
+
+
 def slim(d, region):
     """Keep only what the pipeline and the website use, so the cache stays small."""
     providers = (d.get("watch/providers") or {}).get("results", {})
@@ -97,12 +115,20 @@ def main():
     ap.add_argument("--region", default="IN", help="country for 'where to watch' (ISO code)")
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--rate", type=float, default=30, help="max requests per second")
+    ap.add_argument("--languages", default="hi,ta,te,ml,kn,mr,bn",
+                    help="also fetch the top shows in these original languages (comma list, '' for none)")
+    ap.add_argument("--per-language", type=int, default=400)
     args = ap.parse_args()
 
     tmdb = Tmdb(per_second=args.rate)
     con = open_db(args.db)
 
     ids = candidate_ids_from_export(int(args.limit * 1.2)) or candidate_ids_from_discover(tmdb, args.limit)
+    langs = [x.strip() for x in args.languages.split(",") if x.strip()]
+    if langs:
+        print("Extra regional shows:")
+        seen = set(ids)
+        ids += [i for i in extra_language_ids(tmdb, langs, args.per_language) if i not in seen]
     have = {r[0] for r in con.execute("SELECT id FROM shows")} | {r[0] for r in con.execute("SELECT id FROM missing")}
     todo = [i for i in ids if i not in have]
     print(f"{len(ids):,} candidates, {len(todo):,} still to fetch")
