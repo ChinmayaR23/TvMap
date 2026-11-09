@@ -1,0 +1,15 @@
+node_modules/
+web/dist/
+/data/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+# Android project: keep the source Capacitor generates, ignore build output
+web/android/.gradle/
+web/android/build/
+web/android/app/build/
+web/android/local.properties
+web/android/app/src/main/assets/public/
+*.keystore
+*.jks

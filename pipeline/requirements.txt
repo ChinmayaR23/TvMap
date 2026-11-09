@@ -1,0 +1,8 @@
+requests>=2.31
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.4
+umap-learn>=0.5.5
+hdbscan>=0.8.33
+# only needed for the vibe search embeddings (build_embeddings.py)
+sentence-transformers>=2.7

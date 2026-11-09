@@ -1,0 +1,9 @@
+{
+  "appId": "com.chinmayar.tvgalaxy",
+  "appName": "TV Galaxy",
+  "webDir": "dist",
+  "backgroundColor": "#05060F",
+  "android": {
+    "backgroundColor": "#05060F"
+  }
+}

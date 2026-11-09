@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05060F">
+  <title>TV Galaxy — a map of TV shows</title>
+  <meta name="description" content="Explore thousands of TV shows as a galaxy. Similar shows sit close together.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Ccircle cx='14' cy='14' r='5' fill='%239FD8FF'/%3E%3Cellipse cx='14' cy='14' rx='12' ry='5' fill='none' stroke='%239FD8FF' stroke-width='1.5' transform='rotate(-25 14 14)'/%3E%3C/svg%3E">
+</head>
+<body>
+  <div id="map" aria-label="Map of TV shows. Scroll or pinch to zoom, drag to move, click a star."></div>
+
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="TV Galaxy home">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="5" fill="#9FD8FF"/><ellipse cx="14" cy="14" rx="12" ry="5" fill="none" stroke="#9FD8FF" stroke-width="1.5" transform="rotate(-25 14 14)"/></svg>
+      <span>TV Galaxy</span>
+    </a>
+
+    <div class="search" role="search">
+      <div class="search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <label for="q" class="sr-only">Search shows or describe a vibe</label>
+        <input id="q" type="search" autocomplete="off" placeholder="Search a show, or describe a vibe: small town mystery…">
+        <div class="mode" role="radiogroup" aria-label="Search mode">
+          <button type="button" role="radio" data-mode="auto" aria-checked="true">Auto</button>
+          <button type="button" role="radio" data-mode="title" aria-checked="false">Title</button>
+          <button type="button" role="radio" data-mode="vibe" aria-checked="false">Vibe</button>
+        </div>
+      </div>
+      <ul id="suggest" class="suggest" role="listbox" hidden></ul>
+      <div id="moods" class="moods" aria-label="Vibe ideas"></div>
+    </div>
+
+    <nav class="nav">
+      <button type="button" id="nav-explore" class="nav-btn active">Explore</button>
+      <button type="button" id="nav-universe" class="nav-btn">My Universe</button>
+    </nav>
+  </header>
+
+  <aside id="galaxies" class="panel left" aria-label="Galaxies">
+    <button type="button" class="panel-toggle" id="galaxies-toggle" aria-expanded="true">
+      <span>Galaxies</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="galaxy-list" id="galaxy-list"></div>
+  </aside>
+
+  <aside id="side" class="panel right" aria-live="polite" hidden></aside>
+
+  <div class="controls">
+    <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+    <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+    <button type="button" id="zoom-fit" aria-label="Show the whole galaxy">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+    <span class="hint" id="hint"></span>
+  </div>
+
+  <div id="loading" class="loading">Loading the galaxy…</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
