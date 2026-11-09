@@ -1,0 +1,94 @@
+name: Build data
+
+# Runs the whole data pipeline on GitHub's servers and commits the result to web/public/data.
+# Needs the repo secret TMDB_TOKEN (your TMDB "API Read Access Token").
+# Start it from the Actions tab > Build data > Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: How many of the most popular shows to fetch
+        default: "20000"
+      episodes_top:
+        description: Shows to fetch episode ratings for (0 = skip)
+        default: "3000"
+      embeddings:
+        description: Build vibe-search embeddings
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the TMDB secret is set
+        run: |
+          if [ -z "$TMDB_TOKEN" ]; then
+            echo "::error::Add the repo secret TMDB_TOKEN (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r pipeline/requirements.txt
+
+      # the TMDB cache is kept between runs, so a re-run only fetches what is missing
+      - name: Restore TMDB cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/tmdb.sqlite
+          key: tmdb-db-${{ github.run_id }}
+          restore-keys: tmdb-db-
+
+      - name: Fetch shows from TMDB
+        run: python pipeline/fetch_tmdb.py --limit ${{ inputs.limit }}
+
+      - name: Fetch episode ratings
+        if: ${{ inputs.episodes_top != '0' }}
+        run: python pipeline/fetch_episodes.py --top ${{ inputs.episodes_top }}
+
+      - name: Save TMDB cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/tmdb.sqlite
+          key: tmdb-db-${{ github.run_id }}
+
+      - name: Build map
+        run: python pipeline/build_map.py
+
+      - name: Build vibe-search embeddings
+        if: ${{ inputs.embeddings }}
+        run: python pipeline/build_embeddings.py
+
+      - name: Commit data
+        run: |
+          git config user.name "ChinmayaR23"
+          git config user.email "chinmayar2003@gmail.com"
+          git add web/public/data
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Update TV data: $(python -c "import json;print(json.load(open('web/public/data/shows.json'))['count'])") shows"
+            git push
+          fi
