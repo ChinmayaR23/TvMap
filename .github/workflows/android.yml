@@ -1,0 +1,74 @@
+name: Build Android app
+
+# Builds a test APK (debug-signed) and publishes it to the "app" release:
+# https://github.com/ChinmayaR23/TvMap/releases/tag/app
+# The app loads show data from the website, so it doesn't need rebuilding when the data changes.
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Build the web app (without bundled data)
+        run: |
+          npm ci --ignore-scripts
+          npm run build:android
+
+      - name: Create the Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Build APK
+        working-directory: web/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../../tv-galaxy.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tv-galaxy-apk
+          path: tv-galaxy.apk
+
+      - name: Publish to the "app" release
+        working-directory: .
+        run: |
+          NOTES="Test build $(date -u +%Y-%m-%d) from ${GITHUB_SHA::7}. Download tv-galaxy.apk on your Android phone and open it (allow installing from this source)."
+          if gh release view app >/dev/null 2>&1; then
+            gh release upload app tv-galaxy.apk --clobber
+            gh release edit app --notes "$NOTES"
+          else
+            gh release create app tv-galaxy.apk --title "TV Galaxy Android app (test build)" --notes "$NOTES" --prerelease
+          fi
