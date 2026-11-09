@@ -60,7 +60,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .panel.right[hidden] { display: none; }
 .close { position: sticky; top: 0; align-self: flex-end; margin: -8px -8px -40px 0; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255,255,255,0.08); display: grid; place-items: center; z-index: 1; flex: none; }
 .show-head { display: flex; gap: 16px; align-items: flex-start; }
-.poster { width: 96px; height: 142px; flex: none; border-radius: 12px; object-fit: cover; border: 1px solid rgba(255,255,255,0.12); background: #11142A; }
+.poster { width: 72px; height: 106px; flex: none; border-radius: 12px; object-fit: cover; border: 1px solid rgba(255,255,255,0.12); background: #11142A; }
 .poster.blank { display: grid; place-items: end center; padding-bottom: 8px; font-size: 11px; color: rgba(255,255,255,0.6); }
 .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
 .show-head h2 { margin: 6px 0; font-family: var(--head); font-size: 26px; line-height: 1.1; }
@@ -70,6 +70,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .section-title small { font-family: Inter, sans-serif; font-weight: 400; font-size: 11px; color: var(--muted); }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); color: var(--soft); }
+.fold { border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.02); }
+.fold summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 13px 14px; cursor: pointer; font-family: var(--head); font-weight: 600; font-size: 15px; min-height: 44px; }
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary small { font-family: Inter, sans-serif; font-weight: 400; font-size: 11px; color: var(--muted); }
+.fold summary .chev { margin-left: auto; transition: transform .2s; color: var(--muted); }
+.fold[open] summary .chev { transform: rotate(180deg); }
+.fold-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 12px; }
 .heat-row { display: flex; gap: 3px; align-items: center; margin-bottom: 3px; }
 .heat-row span { width: 26px; font-size: 11px; color: var(--muted); flex: none; }
 .heat-cell { flex: 1 1 0; min-width: 4px; max-width: 26px; height: 18px; border-radius: 3px; }
@@ -116,6 +123,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .search-box { padding-left: 12px; }
   .mode button { font-size: 11px; padding: 5px 7px; min-height: 28px; }
   body.sheet-open .controls, body.sheet-open #galaxies { display: none; }
-  .poster { width: 76px; height: 112px; }
+  .poster { width: 60px; height: 88px; }
   .show-head h2 { font-size: 22px; }
 }

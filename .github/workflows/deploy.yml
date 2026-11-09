@@ -1,12 +1,11 @@
 name: Deploy website to GitHub Pages
 
+# Rebuilds the website when code changes. The show data comes from the latest "data" release
+# (made by the Build data workflow); if there is none yet, the data committed in web/public/data is used.
+
 on:
   push:
     branches: [main]
-  # pushes made by the Build data workflow don't trigger "push", so redeploy when it finishes
-  workflow_run:
-    workflows: [Build data]
-    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -20,15 +19,22 @@ concurrency:
 
 jobs:
   build:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
+
+      - name: Get the latest data release
+        run: |
+          if gh release download data -p data.tar.gz -D /tmp 2>/dev/null; then
+            rm -rf web/public/data && mkdir -p web/public/data
+            tar -xzf /tmp/data.tar.gz -C web/public/data
+            echo "Using data from the 'data' release"
+          else
+            echo "No 'data' release yet, using the data committed in the repo"
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -36,7 +42,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
       # --ignore-scripts skips onnxruntime-node's native download; the site only uses the browser build
       - run: npm ci --ignore-scripts
+        working-directory: web
       - run: npm run build
+        working-directory: web
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist

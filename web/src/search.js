@@ -3,7 +3,7 @@
 //  - vibe search:  "small town investigation mystery" -> shows that fit the description
 // Vibe score = 0.6 meaning match (embeddings, if built) + 0.3 keyword match + 0.1 popularity.
 // Without embeddings it falls back to keyword match (0.85) + popularity (0.15).
-import { loadEmbeddings } from './data.js';
+import { loadEmbeddings, loadKeywords } from './data.js';
 
 const STOP = new Set('a an the and or of in on at to for with about like show shows series something some that is are was be by from set where who which this kind type sort want watch me i my'.split(' '));
 
@@ -134,6 +134,7 @@ export function createSearch(core) {
   }
 
   async function vibe(q, { onStatus, limit = 30 } = {}) {
+    await loadKeywords(core);
     const { scores: kw, matched } = keywordScores(q);
     const emb = await loadEmbeddings();
     const n = core.shows.length;
@@ -143,8 +144,9 @@ export function createSearch(core) {
         const v = await embedQuery(q, emb, onStatus);
         sem = new Float32Array(n);
         const d = emb.dim;
+        const m = Math.min(n, emb.count);
         let max = -1, min = 1;
-        for (let i = 0; i < n; i++) {
+        for (let i = 0; i < m; i++) {
           let dot = 0;
           const off = i * d;
           for (let k = 0; k < d; k++) dot += v[k] * emb.vectors[off + k];
@@ -160,21 +162,24 @@ export function createSearch(core) {
         sem = null;
       }
     }
-    const kwMax = Math.max(...kw) || 1;
+    let kwMax = 0;
+    for (let i = 0; i < n; i++) if (kw[i] > kwMax) kwMax = kw[i];
+    kwMax = kwMax || 1;
     const res = [];
     for (let i = 0; i < n; i++) {
       const k = kw[i] / kwMax;
+      if (k <= 0 && !(sem && sem[i] > 0)) continue; // popularity alone is not a match
       const pop = core.shows[i].p;
-      const score = sem ? 0.6 * sem[i] + 0.3 * k + 0.1 * pop : k > 0 ? 0.85 * k + 0.15 * pop : 0;
-      if (score > 0.05) {
-        // show "small town", not "small · town · small town"
-        const m = [...new Set(matched[i])].sort((a, b) => b.length - a.length);
-        const tidy = m.filter((t) => !m.some((o) => o !== t && o.includes(' ') && o.split(' ').includes(t)));
-        res.push({ i, score, matched: tidy });
-      }
+      const score = sem ? 0.6 * sem[i] + 0.3 * k + 0.1 * pop : 0.85 * k + 0.15 * pop;
+      if (score > 0.05) res.push({ i, score });
     }
     res.sort((a, b) => b.score - a.score);
-    return { results: res.slice(0, limit), usedModel: !!sem, words: queryTerms(q).words };
+    const top = res.slice(0, limit).map((r) => {
+      // show "small town", not "small · town · small town"
+      const m = [...new Set(matched[r.i])].sort((a, b) => b.length - a.length);
+      return { ...r, matched: m.filter((t) => !m.some((o) => o !== t && o.includes(' ') && o.split(' ').includes(t))) };
+    });
+    return { results: top, usedModel: !!sem, words: queryTerms(q).words };
   }
 
   function looksLikeTitle(q) {

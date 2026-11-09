@@ -156,7 +156,8 @@ def name_cluster(members, shows, kw_df, n_total):
     if prefix == "Japanese" and "Animation" in top_genres:
         return "Anime"
     if "Animation" in top_genres and prefix == "":
-        return "Animation · " + (top_genres[1] if len(top_genres) > 1 and top_genres[0] == "Animation" else top_genres[0])
+        other = [g for g in top_genres if g != "Animation"]
+        return "Animation · " + other[0] if other else "Animation"
     # most characteristic keyword: frequent here, rare elsewhere
     best_kw, best_lift = None, 0
     for k, c in kws.items():
@@ -221,12 +222,15 @@ def main():
 
     # ---- nearest neighbours (exact, chunked)
     recs = [set(id_to_idx[r] for r in s.get("recommendations", []) if r in id_to_idx) for s in shows]
-    k = min(TOP_K, n - 1)
+    k = min(TOP_K if n <= 50000 else 10, n - 1)
     nb_idx = np.zeros((n, k), dtype=np.int32)
     nb_score = np.zeros((n, k), dtype=np.float32)
     XT = X.T.tocsc()
-    for start in range(0, n, 1000):
-        stop = min(n, start + 1000)
+    rows_per_chunk = max(64, min(1000, int(4e7 // n)))  # keeps each dense block around 160 MB
+    for start in range(0, n, rows_per_chunk):
+        stop = min(n, start + rows_per_chunk)
+        if start and start % (rows_per_chunk * 50) == 0:
+            print(f"  neighbours {start:,}/{n:,}")
         S = (X[start:stop] @ XT).toarray()
         for r in range(stop - start):
             i = start + r
@@ -249,7 +253,11 @@ def main():
     J = nb_idx.ravel()
     contrib = {}
     for b, m in blocks.items():
-        contrib[b] = WEIGHTS[b] * np.asarray(m[I].multiply(m[J]).sum(axis=1)).ravel()
+        parts = []
+        for s0 in range(0, len(I), 200000):
+            ii, jj = I[s0:s0 + 200000], J[s0:s0 + 200000]
+            parts.append(np.asarray(m[ii].multiply(m[jj]).sum(axis=1)).ravel())
+        contrib[b] = WEIGHTS[b] * np.concatenate(parts)
 
     kw_idf = {t: math.log(n / kw_df[t]) + 1 for t in kw_df}
 
@@ -291,8 +299,12 @@ def main():
     xy /= xy.max(axis=0).max() + 1e-9
     xy = 40 + xy * 920  # world units 40..960
 
-    min_cluster = args.min_cluster or (3 if small else max(15, n // 350))
-    labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster, min_samples=max(2, min_cluster // 3)).fit_predict(Z)
+    min_cluster = args.min_cluster or (3 if small else max(15, n // 350 if n <= 30000 else n // 400))
+    if n > 30000:
+        # on very large maps cluster the 2-D layout itself: much faster, and galaxies match what you see
+        labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster, min_samples=10).fit_predict(xy)
+    else:
+        labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster, min_samples=max(2, min_cluster // 3)).fit_predict(Z)
     for i in np.where(labels < 0)[0]:  # noise: borrow the label of the nearest clustered neighbour
         for j in nb_idx[i]:
             if labels[j] >= 0:
@@ -340,9 +352,9 @@ def main():
         "chunk": CHUNK,
         "weights": WEIGHTS,
         "genres": genre_vocab,
-        "keywords": kw_core,
         "languages": LANG_NAMES,
         "clusters": clusters,
+        # shows are sorted by popularity, so the index is also the popularity rank
         "shows": [
             {
                 "id": s["id"],
@@ -354,14 +366,14 @@ def main():
                 "y0": year_of(s),
                 "l": s.get("original_language"),
                 "g": [g_index[g] for g in s.get("genres", [])],
-                "k": [k_index[kw] for kw in s.get("keywords", [])[:15]],
-                "net": (s.get("networks") or [None])[0],
-                "prov": s.get("providers", [])[:3],
             }
             for i, s in enumerate(shows)
         ],
     }
     (out / "shows.json").write_text(json.dumps(core, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+    # keywords are only needed for vibe search, so they live in their own file loaded on demand
+    kw_file = {"keywords": kw_core, "k": [[k_index[kw] for kw in s.get("keywords", [])[:15]] for s in shows]}
+    (out / "kw.json").write_text(json.dumps(kw_file, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
 
     seasons = defaultdict(dict)
     for sid, num, js in con.execute("SELECT show_id, season, json FROM seasons"):
@@ -382,7 +394,6 @@ def main():
                 nbs.append([j, match_pct(nb_score[i, t]), reasons(i, j, p)])
             chunk[i] = {
                 "ov": s.get("overview", ""),
-                "tag": s.get("tagline", ""),
                 "y1": year_of(s, "last_air_date"),
                 "st": s.get("status", ""),
                 "ns": s.get("number_of_seasons", 0),

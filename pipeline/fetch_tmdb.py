@@ -20,7 +20,8 @@ APPEND = "keywords,aggregate_credits,watch/providers,content_ratings,recommendat
 
 
 def candidate_ids_from_export(limit):
-    """TMDB publishes a daily file listing every TV series id with its popularity."""
+    """TMDB publishes a daily file listing every TV series id with its popularity.
+    limit=None takes every series in the file."""
     import requests
 
     for days_back in range(1, 5):
@@ -38,7 +39,7 @@ def candidate_ids_from_export(limit):
                     pass
         rows.sort(key=lambda x: x.get("popularity", 0), reverse=True)
         print(f"Export {day}: {len(rows):,} series listed")
-        return [x["id"] for x in rows[:limit]]
+        return [x["id"] for x in (rows if limit is None else rows[:limit])]
     return None
 
 
@@ -110,7 +111,8 @@ def slim(d, region):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=20000, help="how many of the most popular shows to fetch")
+    ap.add_argument("--limit", default="20000",
+                    help="how many of the most popular shows to fetch, or 'all' for every series on TMDB")
     ap.add_argument("--db", default=str(DEFAULT_DB))
     ap.add_argument("--region", default="IN", help="country for 'where to watch' (ISO code)")
     ap.add_argument("--workers", type=int, default=8)
@@ -123,7 +125,9 @@ def main():
     tmdb = Tmdb(per_second=args.rate)
     con = open_db(args.db)
 
-    ids = candidate_ids_from_export(int(args.limit * 1.2)) or candidate_ids_from_discover(tmdb, args.limit)
+    limit = None if str(args.limit).lower() in ("all", "0") else int(args.limit)
+    ids = candidate_ids_from_export(None if limit is None else int(limit * 1.2)) \
+        or candidate_ids_from_discover(tmdb, limit or 10000)
     langs = [x.strip() for x in args.languages.split(",") if x.strip()]
     if langs:
         print("Extra regional shows:")

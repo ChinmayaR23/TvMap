@@ -51,7 +51,9 @@ export async function createMap(el, core, { onSelect, onBackground }) {
   const nebLayer = new Container();
   const lineLayer = new Graphics();
   const starLayer = new Container();
-  world.addChild(nebLayer, lineLayer, starLayer);
+  const extraLayer = new Container();
+  world.addChild(nebLayer, lineLayer, starLayer, extraLayer);
+  let shown = 0; // stars[0..shown) are in starLayer
   const labelLayer = new Container(); // screen space
   app.stage.addChild(labelLayer);
 
@@ -71,8 +73,14 @@ export async function createMap(el, core, { onSelect, onBackground }) {
   });
 
   // with thousands of stars, shrink them and stop additive blending, or the centre burns out to white
-  const crowd = core.shows.length > 1000;
-  const density = Math.max(0.2, Math.min(1, Math.sqrt(400 / core.shows.length)));
+  // Level of detail: shows are sorted by popularity, so index = rank. Zoomed out we draw only the
+  // top BASE_VISIBLE; zooming in reveals more. Searched / selected shows are always drawn.
+  const N = core.shows.length;
+  const BASE_VISIBLE = 15000;
+  let visibleCount = N;
+  const isVisible = (i) => i < visibleCount || focus.has(i);
+  const crowd = N > 1000;
+  const density = Math.max(0.2, Math.min(1, Math.sqrt(400 / Math.min(N, BASE_VISIBLE))));
   const stars = core.shows.map((s) => {
     const sp = new Sprite(starTex);
     sp.anchor.set(0.5);
@@ -80,7 +88,6 @@ export async function createMap(el, core, { onSelect, onBackground }) {
     sp.tint = colorOf(s);
     sp.blendMode = crowd ? 'normal' : 'add';
     sp._base = (0.12 + 0.28 * s.p * s.p) * density * (crowd ? 1.6 : 1);
-    starLayer.addChild(sp);
     return sp;
   });
 
@@ -101,7 +108,7 @@ export async function createMap(el, core, { onSelect, onBackground }) {
         for (const i of grid.get(`${gx},${gy}`) || []) {
           const s = core.shows[i];
           const d = (s.x - wx) ** 2 + (s.y - wy) ** 2;
-          if (d < bd && emph[i] > 0.3) { bd = d; best = i; }
+          if (d < bd && emph[i] > 0.3 && isVisible(i)) { bd = d; best = i; }
         }
       }
     }
@@ -211,7 +218,7 @@ export async function createMap(el, core, { onSelect, onBackground }) {
     const s = world.scale.x;
     const i = nearest((e.clientX - rect.left - world.x) / s, (e.clientY - rect.top - world.y) / s, 12 / s);
     canvas.style.cursor = i >= 0 ? 'pointer' : 'grab';
-    if (i !== hoverIdx) { hoverIdx = i; changed(); }
+    if (i !== hoverIdx) { hoverIdx = i; restyled(); }
   }
   let hoverIdx = -1;
 
@@ -238,7 +245,7 @@ export async function createMap(el, core, { onSelect, onBackground }) {
       c._sprite.alpha = cluster !== null ? (c.id === cluster ? 0.45 : 0.06) : anyFocus ? NEB_ALPHA * 0.45 : NEB_ALPHA;
     });
     drawLines();
-    changed();
+    restyled();
   }
 
   function drawLines() {
@@ -276,13 +283,16 @@ export async function createMap(el, core, { onSelect, onBackground }) {
     const zoomRatio = s / fitScale();
     const budget = Math.min(MAX_LABELS, Math.round(14 * zoomRatio * zoomRatio));
     const cand = [];
-    core.shows.forEach((sh, i) => {
+    const consider = (i) => {
+      const sh = core.shows[i];
       const x = sh.x * s + world.x, y = sh.y * s + world.y;
       if (x < -50 || y < -20 || x > W + 50 || y > H + 20) return;
       if (emph[i] < 0.5) return;
       const prio = (focus.has(i) ? 10 : 0) + (i === primary ? 10 : 0) + (i === hoverIdx ? 20 : 0) + sh.p;
       cand.push([prio, i, x, y]);
-    });
+    };
+    for (let i = 0; i < Math.min(visibleCount, N); i++) consider(i);
+    focus.forEach((i) => { if (i >= visibleCount) consider(i); });
     cand.sort((a, b) => b[0] - a[0]);
     const taken = new Set();
     assigned = [];
@@ -296,8 +306,9 @@ export async function createMap(el, core, { onSelect, onBackground }) {
     }
   }
 
-  let dirty = true, lastPick = 0;
+  let dirty = true, lastPick = 0, styleDirty = true, lastS = 0;
   function changed() { dirty = true; }
+  function restyled() { styleDirty = true; dirty = true; }
 
   app.ticker.add(() => {
     const now = performance.now();
@@ -307,11 +318,30 @@ export async function createMap(el, core, { onSelect, onBackground }) {
     const s = world.scale.x;
     dust.position.set(world.x * 0.15, world.y * 0.15);
     const sizeK = Math.pow(s, -0.65) * 2.4;
-    stars.forEach((sp, i) => {
-      const big = i === primary ? 2.0 : i === hoverIdx ? 1.6 : focus.has(i) ? 1.3 : 1;
-      sp.scale.set(sp._base * sizeK * big);
-      sp.alpha = emph[i];
-    });
+    const zr = s / fitScale();
+    visibleCount = N <= BASE_VISIBLE ? N : Math.min(N, Math.round(BASE_VISIBLE * zr * zr));
+    // panning only moves the world container: re-style the stars only when zoom or highlight changed
+    // (small zoom steps are skipped: the stars already scale with the world, the difference is invisible)
+    const restyle = styleDirty || Math.abs(s / (lastS || s) - 1) > 0.05 || !lastS;
+    styleDirty = false;
+    if (restyle) lastS = s;
+    if (restyle) {
+      // only the drawn stars live in the scene: the top `shown` in starLayer, plus searched /
+      // selected stars beyond that in extraLayer
+      const want = Math.min(visibleCount, N);
+      while (shown < want) starLayer.addChild(stars[shown++]);
+      while (shown > want) { starLayer.removeChildAt(starLayer.children.length - 1); shown--; }
+      extraLayer.removeChildren();
+      focus.forEach((i) => { if (i >= shown) extraLayer.addChild(stars[i]); });
+      const style = (i) => {
+        const sp = stars[i];
+        const big = i === primary ? 2.0 : i === hoverIdx ? 1.6 : focus.has(i) ? 1.3 : 1;
+        sp.scale.set(sp._base * sizeK * big);
+        sp.alpha = emph[i];
+      };
+      for (let i = 0; i < shown; i++) style(i);
+      focus.forEach((i) => { if (i >= shown) style(i); });
+    }
     if (now - lastPick > 90 || !assigned.length) { chooseLabels(); lastPick = now; } else { dirty = true; }
     pool.forEach((t, k) => {
       const i = assigned[k];
@@ -339,12 +369,13 @@ export async function createMap(el, core, { onSelect, onBackground }) {
     });
   });
 
-  new ResizeObserver(() => changed()).observe(el);
+  new ResizeObserver(() => restyled()).observe(el);
   setView(fitScale(), WORLD / 2, WORLD / 2 - TOP_PAD / fitScale());
   minScale = fitScale() * 0.6;
 
   return {
     setHighlight,
+    visibleCount: () => Math.min(visibleCount, N),
     fit,
     zoomBy: (f) => zoomAt(f, app.screen.width / 2, app.screen.height / 2),
     flyTo(i, zoom = 6) {

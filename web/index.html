@@ -24,11 +24,11 @@
       <div class="search-box">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <label for="q" class="sr-only">Search shows or describe a vibe</label>
-        <input id="q" type="search" autocomplete="off" placeholder="Search a show, or describe a vibe: small town mystery…">
+        <input id="q" type="search" autocomplete="off" placeholder="Search a show title…">
         <div class="mode" role="radiogroup" aria-label="Search mode">
-          <button type="button" role="radio" data-mode="auto" aria-checked="true">Auto</button>
-          <button type="button" role="radio" data-mode="title" aria-checked="false">Title</button>
+          <button type="button" role="radio" data-mode="title" aria-checked="true">Title</button>
           <button type="button" role="radio" data-mode="vibe" aria-checked="false">Vibe</button>
+          <button type="button" role="radio" data-mode="auto" aria-checked="false">Auto</button>
         </div>
       </div>
       <ul id="suggest" class="suggest" role="listbox" hidden></ul>

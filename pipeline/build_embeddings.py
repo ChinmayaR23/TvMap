@@ -36,13 +36,17 @@ def main():
     ap.add_argument("--db", default=str(DEFAULT_DB))
     ap.add_argument("--out", default=str(WEB_DATA))
     ap.add_argument("--batch", type=int, default=128)
+    ap.add_argument("--top", type=int, default=40000,
+                    help="only the N most popular shows get vectors (keeps the download small); "
+                         "the rest are still found by keyword")
     args = ap.parse_args()
 
     from sentence_transformers import SentenceTransformer
 
     core = json.loads((WEB_DATA / "shows.json").read_text(encoding="utf-8"))
     by_id = {s["id"]: s for s in load_shows(open_db(args.db))}
-    texts = [show_text(by_id[s["id"]]) for s in core["shows"]]
+    # shows.json is sorted by popularity, so the first N are the most popular
+    texts = [show_text(by_id[s["id"]]) for s in core["shows"][: args.top]]
 
     model = SentenceTransformer(MODEL)
     vecs = model.encode(texts, batch_size=args.batch, normalize_embeddings=True, show_progress_bar=True)

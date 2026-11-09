@@ -14,7 +14,7 @@ const core = await loadCore().catch((err) => {
 });
 const search = createSearch(core);
 const universe = createUniverse(core);
-const state = { view: 'explore', current: null, cluster: null, mode: 'auto' };
+const state = { view: 'explore', current: null, cluster: null, mode: 'title' };
 
 const map = await createMap($('#map'), core, {
   onSelect: (i) => selectShow(i),
@@ -27,7 +27,7 @@ $('#loading').classList.add('gone');
 // on phones the details panel is a bottom sheet: hide the floating controls while it is open
 new MutationObserver(() => document.body.classList.toggle('sheet-open', !$('#side').hidden))
   .observe($('#side'), { attributes: true, attributeFilter: ['hidden'] });
-$('#hint').textContent = `Scroll to zoom · drag to move · click a star · ${core.count.toLocaleString()} shows${core.demo ? ' (demo data)' : ''}`;
+$('#hint').textContent = `Scroll to zoom · drag to move · click a star · ${core.count.toLocaleString()} shows${core.count > 15000 ? ' (zoom in to see more)' : ''}${core.demo ? ' (demo data)' : ''}`;
 
 // ------------------------------------------------------------------ galaxies panel
 function renderGalaxies() {
@@ -101,14 +101,6 @@ async function selectShow(i, { fly = true, push = true } = {}) {
         <div class="meta-line">${metaLine(s, d)}</div>
       </div>
     </div>
-    ${d.ov ? `<p class="overview">${esc(d.ov)}</p>` : ''}
-    ${s.genreNames.length || d.kw.length ? `<div class="tags">${[...s.genreNames, ...d.kw.slice(0, 8)].map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
-    ${d.cr.length ? `<div class="muted">Created by ${esc(d.cr.join(', '))}${d.cast.length ? `<br>Starring ${esc(d.cast.slice(0, 4).join(', '))}` : ''}</div>` : ''}
-    ${d.heat ? `<div>
-        <div class="section-title">Episode ratings <small>each square is one episode</small></div>
-        ${d.heat.map((row, k) => `<div class="heat-row"><span>S${k + 1}</span>${row.map((r, e) => `<div class="heat-cell" style="background:${heatColor(r)}" title="S${k + 1} E${e + 1}: ${r ?? 'no rating'}"></div>`).join('')}</div>`).join('')}
-        <div class="heat-legend"><span>weaker</span><span>stronger</span></div>
-      </div>` : ''}
     <div>
       <div class="section-title">Nearest stars <small>match % · why</small></div>
       <div class="similar">
@@ -121,7 +113,22 @@ async function selectShow(i, { fly = true, push = true } = {}) {
         }).join('')}
       </div>
     </div>
-    ${d.prov.length ? `<div class="muted">Streaming in India: <b style="color:var(--text)">${esc(d.prov.join(', '))}</b>${d.provLink ? ` · <a href="${esc(d.provLink)}" target="_blank" rel="noopener" style="color:var(--accent)">details</a>` : ''}<br><span style="font-size:11px">Streaming data by JustWatch</span></div>` : ''}
+    <details class="fold" data-fold="about" ${folds.about ? 'open' : ''}>
+      <summary>About the show ${chevron}</summary>
+      <div class="fold-body">
+        ${d.ov ? `<p class="overview">${esc(d.ov)}</p>` : '<p class="muted">No summary on TMDB.</p>'}
+        ${s.genreNames.length || d.kw.length ? `<div class="tags">${[...s.genreNames, ...d.kw.slice(0, 8)].map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+        ${d.cr.length || d.cast.length ? `<div class="muted">${d.cr.length ? `Created by ${esc(d.cr.join(', '))}` : ''}${d.cr.length && d.cast.length ? '<br>' : ''}${d.cast.length ? `Starring ${esc(d.cast.slice(0, 4).join(', '))}` : ''}</div>` : ''}
+        ${d.prov.length ? `<div class="muted">Streaming in India: <b style="color:var(--text)">${esc(d.prov.join(', '))}</b>${d.provLink ? ` · <a href="${esc(d.provLink)}" target="_blank" rel="noopener" style="color:var(--accent)">details</a>` : ''}<br><span style="font-size:11px">Streaming data by JustWatch</span></div>` : ''}
+      </div>
+    </details>
+    ${d.heat ? `<details class="fold" data-fold="ratings" ${folds.ratings ? 'open' : ''}>
+      <summary>Episode ratings <small>each square is one episode</small> ${chevron}</summary>
+      <div class="fold-body">
+        <div>${d.heat.map((row, k) => `<div class="heat-row"><span>S${k + 1}</span>${row.map((r, e) => `<div class="heat-cell" style="background:${heatColor(r)}" title="S${k + 1} E${e + 1}: ${r ?? 'no rating'}"></div>`).join('')}</div>`).join('')}
+        <div class="heat-legend"><span>weaker</span><span>stronger</span></div></div>
+      </div>
+    </details>` : ''}
     <div class="actions">
       <button type="button" class="btn primary ${watched ? 'done' : ''}" id="watch-btn">${watched ? 'Watched ✓' : 'Mark as watched'}</button>
       ${core.demo ? '' : `<a class="btn" href="https://www.themoviedb.org/tv/${s.id}" target="_blank" rel="noopener">Open on TMDB</a>`}
@@ -129,12 +136,16 @@ async function selectShow(i, { fly = true, push = true } = {}) {
   side.scrollTop = 0;
   side.querySelector('.close').addEventListener('click', clearSelection);
   side.querySelectorAll('.sim').forEach((b) => b.addEventListener('click', () => selectShow(+b.dataset.i)));
+  // remember which sections the user opened, so they stay open for the next show
+  side.querySelectorAll('details.fold').forEach((f) => f.addEventListener('toggle', () => { folds[f.dataset.fold] = f.open; }));
   side.querySelector('#watch-btn').addEventListener('click', () => {
     universe.toggle(i);
     selectShow(i, { fly: false });
   });
 }
 
+const folds = { about: false, ratings: false };
+const chevron = '<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 const closeIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
 function clearSelection() {
@@ -182,7 +193,10 @@ async function runVibe(q, { push = true } = {}) {
 // ------------------------------------------------------------------ search box
 const input = $('#q');
 const suggest = $('#suggest');
-if (window.innerWidth <= 760) input.placeholder = 'Show title or a vibe…';
+const PLACEHOLDER = window.innerWidth <= 760
+  ? { title: 'Search a show title…', vibe: 'Describe a vibe…', auto: 'Title or a vibe…' }
+  : { title: 'Search a show title…', vibe: 'Describe a vibe: small town investigation mystery…', auto: 'Search a show, or describe a vibe…' };
+input.placeholder = PLACEHOLDER.title;
 let active = -1;
 let items = [];
 
@@ -191,7 +205,8 @@ function renderSuggest() {
   if (!q) { suggest.hidden = true; items = []; return; }
   const t = state.mode === 'vibe' ? [] : search.titles(q, 7);
   items = [];
-  if (state.mode !== 'title') items.push({ type: 'vibe', q });
+  // in Title mode the vibe option only appears when no title matches
+  if (state.mode !== 'title' || t.length === 0) items.push({ type: 'vibe', q });
   t.forEach((r) => items.push({ type: 'show', i: r.i }));
   if (state.mode === 'auto' && search.looksLikeTitle(q) && items[0]?.type === 'vibe') items.push(items.shift());
   suggest.innerHTML = items
@@ -251,7 +266,8 @@ document.querySelectorAll('.mode button').forEach((b) =>
   b.addEventListener('click', () => {
     state.mode = b.dataset.mode;
     document.querySelectorAll('.mode button').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
-    input.placeholder = state.mode === 'title' ? 'Search a show title…' : state.mode === 'vibe' ? 'Describe a vibe: small town investigation mystery…' : 'Search a show, or describe a vibe: small town mystery…';
+    input.placeholder = PLACEHOLDER[state.mode];
+    renderSuggest();
     input.focus();
   }),
 );

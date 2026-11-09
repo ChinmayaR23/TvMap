@@ -1,6 +1,7 @@
 name: Build data
 
-# Runs the whole data pipeline on GitHub's servers and commits the result to web/public/data.
+# Runs the whole data pipeline on GitHub's servers, publishes the data as the "data" release
+# (too big to keep committing to git) and deploys the website with it.
 # Needs the repo secret TMDB_TOKEN (your TMDB "API Read Access Token").
 # Start it from the Actions tab > Build data > Run workflow.
 
@@ -8,18 +9,22 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: How many of the most popular shows to fetch
-        default: "20000"
+        description: "Shows to fetch: 'all' or a number (most popular first)"
+        default: "all"
+      min_votes:
+        description: Leave out shows with fewer TMDB votes than this (0 = keep everything)
+        default: "0"
       episodes_top:
         description: Shows to fetch episode ratings for (0 = skip)
-        default: "3000"
-      embeddings:
-        description: Build vibe-search embeddings
-        type: boolean
-        default: true
+        default: "5000"
+      embeddings_top:
+        description: Most popular shows that get vibe-search vectors (0 = skip)
+        default: "40000"
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: build-data
@@ -28,9 +33,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 340
+    timeout-minutes: 350
     env:
       TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
@@ -60,11 +66,17 @@ jobs:
           key: tmdb-db-${{ github.run_id }}
           restore-keys: tmdb-db-
 
+      # if fetching every show takes too long, carry on with what was downloaded;
+      # the next run continues from the cache
       - name: Fetch shows from TMDB
+        timeout-minutes: 200
+        continue-on-error: true
         run: python pipeline/fetch_tmdb.py --limit ${{ inputs.limit }}
 
       - name: Fetch episode ratings
         if: ${{ inputs.episodes_top != '0' }}
+        timeout-minutes: 40
+        continue-on-error: true
         run: python pipeline/fetch_episodes.py --top ${{ inputs.episodes_top }}
 
       - name: Save TMDB cache
@@ -75,20 +87,47 @@ jobs:
           key: tmdb-db-${{ github.run_id }}
 
       - name: Build map
-        run: python pipeline/build_map.py
+        run: python pipeline/build_map.py --min-votes ${{ inputs.min_votes }}
 
       - name: Build vibe-search embeddings
-        if: ${{ inputs.embeddings }}
-        run: python pipeline/build_embeddings.py
+        if: ${{ inputs.embeddings_top != '0' }}
+        run: python pipeline/build_embeddings.py --top ${{ inputs.embeddings_top }}
 
-      - name: Commit data
+      - name: Publish data as the "data" release
         run: |
-          git config user.name "ChinmayaR23"
-          git config user.email "chinmayar2003@gmail.com"
-          git add web/public/data
-          if git diff --cached --quiet; then
-            echo "No changes."
+          COUNT=$(python -c "import json;print(json.load(open('web/public/data/shows.json'))['count'])")
+          tar -czf data.tar.gz -C web/public/data .
+          ls -lh data.tar.gz
+          if gh release view data >/dev/null 2>&1; then
+            gh release upload data data.tar.gz --clobber
+            gh release edit data --notes "$COUNT shows · built $(date -u +%Y-%m-%d)"
           else
-            git commit -m "Update TV data: $(python -c "import json;print(json.load(open('web/public/data/shows.json'))['count'])") shows"
-            git push
+            gh release create data data.tar.gz --title "TV data (latest)" --notes "$COUNT shows · built $(date -u +%Y-%m-%d)"
           fi
+          echo "### $COUNT shows published" >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build website
+        working-directory: web
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

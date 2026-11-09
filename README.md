@@ -9,7 +9,15 @@ coloured galaxies (Crime, Indian web series, K-drama, Anime…). Works as a webs
 - **My Universe** — mark shows as watched; they light up as a constellation and the app points you to galaxies you haven't explored. Saved on the device only.
 - **Shareable links** — `#show=<tmdb id>` or `#vibe=<words>`.
 
-The repo ships with a 50-show **demo dataset** so the site runs immediately. Replace it with real TMDB data using the steps below.
+**Data lives in the `data` release, not in git.** The *Build data* GitHub workflow fetches every show from TMDB,
+builds the map, uploads it as `data.tar.gz` to the release named `data`, and deploys the site. Code pushes redeploy
+the site with that release's data. (`web/public/data` in git is only a fallback for before the first release exists.)
+
+### Rebuilding the data on GitHub (no setup on your laptop)
+1. Repo secret `TMDB_TOKEN` = your TMDB API Read Access Token (Settings → Secrets and variables → Actions).
+2. Actions → **Build data** → Run workflow. Defaults: every show on TMDB, episode ratings for the top 5,000,
+   vibe-search vectors for the top 40,000. A first full run takes a few hours; later runs reuse the cache.
+   If fetching hits the time limit, the run still publishes what it has; run it again to continue.
 
 ## Project layout
 
@@ -39,7 +47,7 @@ python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\
 pip install -r pipeline/requirements.txt
 
 export TMDB_TOKEN="your API Read Access Token"          # Windows PowerShell: $env:TMDB_TOKEN="..."
-python pipeline/fetch_tmdb.py --limit 20000            # about 1-2 hours; Ctrl+C and re-run to resume
+python pipeline/fetch_tmdb.py --limit all              # every show; or a number like 20000. Ctrl+C and re-run to resume
 python pipeline/fetch_episodes.py --top 3000           # optional, for the ratings heatmap
 python pipeline/build_map.py                           # a few minutes
 python pipeline/build_embeddings.py                    # optional, for meaning-based vibe search
@@ -54,6 +62,7 @@ To rebuild the demo instead: `python pipeline/make_demo_data.py && python pipeli
 ```bash
 cd web
 npm install
+npm run get-data     # download the latest data release into web/public/data
 npm run dev          # http://localhost:5173
 npm run build        # production files in web/dist
 ```
@@ -64,11 +73,12 @@ Pushing to `main` deploys the site with GitHub Actions. One-time setup: repo **S
 
 ```bash
 cd web
-npm run build
 npx cap add android      # first time only
-npx cap sync android
-npx cap open android     # Android Studio: Build > Build APK(s)
+npm run android          # builds without the data, syncs, opens Android Studio: Build > Build APK(s)
 ```
+
+The app loads show data from the live website (set in `web/.env.android`), so the APK stays small and
+always has the latest data.
 
 ## How similarity works
 
