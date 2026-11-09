@@ -8,10 +8,14 @@ const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const MOODS = ['small town mystery', 'mind-bending sci-fi', 'cosy feel-good comedy', 'slow-burn crime', 'dark Indian thriller', 'epic fantasy with dragons', 'true story', 'office comedy'];
 
-const core = await loadCore().catch((err) => {
+const step = (msg) => { $('#loading-step').textContent = msg; };
+const t0 = performance.now();
+const core = await loadCore(step).catch((err) => {
   $('#loading').textContent = err.message;
   throw err;
 });
+step(`Drawing ${core.count.toLocaleString()} stars…`);
+await new Promise((r) => requestAnimationFrame(r)); // let the message paint before the heavy work
 const search = createSearch(core);
 const universe = createUniverse(core);
 const state = { view: 'explore', current: null, cluster: null, mode: 'title' };
@@ -24,6 +28,7 @@ const map = await createMap($('#map'), core, {
 });
 
 $('#loading').classList.add('gone');
+console.info(`TV Galaxy ready in ${Math.round(performance.now() - t0)} ms`);
 // on phones the details panel is a bottom sheet: hide the floating controls while it is open
 new MutationObserver(() => document.body.classList.toggle('sheet-open', !$('#side').hidden))
   .observe($('#side'), { attributes: true, attributeFilter: ['hidden'] });

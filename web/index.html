@@ -8,7 +8,8 @@
   <meta name="description" content="Explore thousands of TV shows as a galaxy. Similar shows sit close together.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <!-- fonts load without blocking the first paint (slow networks used to stall the whole app) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Ccircle cx='14' cy='14' r='5' fill='%239FD8FF'/%3E%3Cellipse cx='14' cy='14' rx='12' ry='5' fill='none' stroke='%239FD8FF' stroke-width='1.5' transform='rotate(-25 14 14)'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -60,7 +61,7 @@
     <span class="hint" id="hint"></span>
   </div>
 
-  <div id="loading" class="loading">Loading the galaxy…</div>
+  <div id="loading" class="loading"><div><div>Loading the galaxy…</div><div id="loading-step" class="loading-step"></div></div></div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

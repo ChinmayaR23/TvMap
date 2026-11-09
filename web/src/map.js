@@ -19,6 +19,8 @@ function radialTexture(size, stops) {
 export async function createMap(el, core, { onSelect, onBackground }) {
   const app = new Application();
   await app.init({
+    // WebGL explicitly: WebGPU start-up is slow or broken on many Android WebViews
+    preference: 'webgl',
     resizeTo: el,
     background: '#05060F',
     antialias: true,

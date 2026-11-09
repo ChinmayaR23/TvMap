@@ -333,6 +333,7 @@ def main():
     print(f"{len(clusters)} galaxies")
 
     # ---- write files
+    GENERATED = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())  # version stamp shared by every file
     out = Path(args.out)
     (out / "details").mkdir(parents=True, exist_ok=True)
     for f in (out / "details").glob("*.json"):
@@ -346,7 +347,7 @@ def main():
 
     core = {
         "version": 1,
-        "generated": time.strftime("%Y-%m-%d"),
+        "generated": GENERATED,
         "demo": bool(args.demo),
         "count": n,
         "chunk": CHUNK,
@@ -372,7 +373,7 @@ def main():
     }
     (out / "shows.json").write_text(json.dumps(core, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
     # keywords are only needed for vibe search, so they live in their own file loaded on demand
-    kw_file = {"keywords": kw_core, "k": [[k_index[kw] for kw in s.get("keywords", [])[:15]] for s in shows]}
+    kw_file = {"_v": GENERATED, "keywords": kw_core, "k": [[k_index[kw] for kw in s.get("keywords", [])[:15]] for s in shows]}
     (out / "kw.json").write_text(json.dumps(kw_file, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
 
     seasons = defaultdict(dict)
@@ -380,7 +381,7 @@ def main():
         seasons[sid][num] = json.loads(js)
 
     for start in range(0, n, CHUNK):
-        chunk = {}
+        chunk = {"_v": GENERATED}
         for i in range(start, min(n, start + CHUNK)):
             s = shows[i]
             heat = None

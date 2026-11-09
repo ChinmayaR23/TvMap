@@ -106,6 +106,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hint { font-size: 12px; color: var(--muted); margin-left: 6px; }
 .loading { position: fixed; inset: 0; display: grid; place-items: center; font-family: var(--head); color: var(--soft); background: var(--bg); z-index: 50; transition: opacity .4s; }
 .loading.gone { opacity: 0; pointer-events: none; }
+.loading > div { text-align: center; }
+.loading-step { margin-top: 10px; font-family: Inter, sans-serif; font-size: 13px; color: var(--muted); min-height: 18px; }
 .badge { display: inline-block; font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(255, 216, 77, 0.14); color: #FFE08A; margin-left: 8px; vertical-align: middle; }
 
 /* ---------- phones: panels become bottom sheets */

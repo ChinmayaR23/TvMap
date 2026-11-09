@@ -52,7 +52,7 @@ def main():
     vecs = model.encode(texts, batch_size=args.batch, normalize_embeddings=True, show_progress_bar=True)
     q = np.clip(np.round(vecs * 127), -127, 127).astype(np.int8)
     (WEB_DATA / "emb.bin").write_bytes(q.tobytes())
-    (WEB_DATA / "emb.json").write_text(json.dumps({"model": BROWSER_MODEL, "dim": int(q.shape[1]), "count": int(q.shape[0])}))
+    (WEB_DATA / "emb.json").write_text(json.dumps({"generated": core.get("generated"), "model": BROWSER_MODEL, "dim": int(q.shape[1]), "count": int(q.shape[0])}))
     print(f"Wrote {q.shape[0]:,} x {q.shape[1]} vectors ({q.nbytes / 1e6:.1f} MB)")
 
 
